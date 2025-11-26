@@ -62,9 +62,43 @@
                 margin: 0 auto;
             }
         }
+
+        /* --- DRAMATIC EFFECT STYLES --- */
+        .dramatic-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8vw; /* Large and responsive text */
+            font-weight: 900;
+            color: white;
+            text-align: center;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+        .blinking-text {
+            animation: blink 0.7s infinite alternate;
+            padding: 20px;
+            line-height: 1.2;
+            text-shadow: 0 0 10px red, 0 0 20px yellow;
+            font-family: 'Bungee', cursive; 
+        }
     </style>
 </head>
 <body>
+    <!-- DRAMATIC MESSAGE OVERLAY (Initially hidden) -->
+    <div id="dramatic-message-overlay" class="dramatic-overlay" style="display:none;">
+        <span id="dramatic-text" class="blinking-text">RAAZI SIR SALARY PENDING ENNU PARAYAAAN PARANJU... 😂👏</span>
+    </div>
+
     <!-- Welcome -->
     <div id="welcome" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center">
         <div class="bg-gray-900 p-8 rounded-xl border-4 border-indigo-500 text-center w-[90%] max-w-xl">
@@ -111,7 +145,8 @@
             </div>
             <div class="flex justify-center">
                 <div id="drag-preview-container" class="label-box" style="width:208px;height:397px;">
-                    <img id="template-image-preview" src="" alt="Template" style="width:100%;height:100%;object-fit:cover;display:block" />
+                    <!-- The image src will be set by the JavaScript function fetchAndInitialize on load -->
+                    <img id="template-image-preview" src="" alt="Default Template" style="width:100%;height:100%;object-fit:cover;display:none" />
                 </div>
             </div>
             <p class="text-sm muted mt-3">Add text / barcodes below, drag to position. Values and positions are used when generating A4 sheets.</p>
@@ -246,9 +281,10 @@
         const A4_WIDTH_MM = 210;
         const A4_HEIGHT_MM = 297;
         const PAGE_PADDING_MM = 5;
+        const DEFAULT_TEMPLATE_FILE = '41715.png'; // New default image file
 
-        let colors = ["Green","Cream","Purple","Black","White","Pink"];
-        const sizes = ["XS","S","M","L","XL","2XL","XXL"];
+        let colors = ["Green","Cream","Purple","Black","White","Pink", "Ktunder"];
+        const sizes = ["XS","S","M","L","XL","2XL","XXL", "90"];
 
         let nextElementId = 1;
         let selectedOverlay = null;
@@ -294,6 +330,9 @@
         
         const gapXInput = document.getElementById('gap-x-mm');
         const gapYInput = document.getElementById('gap-y-mm');
+        
+        // New refs for dramatic effect
+        const dramaticOverlay = document.getElementById('dramatic-message-overlay');
 
 
         /* ---------------- helpers ---------------- */
@@ -487,7 +526,7 @@
         }
 
         function startDrag(e){
-            // REMOVED e.preventDefault() here to allow native click event to fire on tap (iOS fix).
+            // iOS Fix: Don't prevent default on start to allow native click event to fire on quick tap.
             if (!e.touches && e.button !== 0) return; // Only allow left mouse button
 
             activeElement = e.target.closest('.text-overlay');
@@ -496,7 +535,6 @@
             selectOverlay(activeElement);
 
             if (activeElement.dataset.locked === 'true') {
-                // If locked, we don't attach drag listeners, relying on native click event for selection.
                 return; 
             }
 
@@ -844,7 +882,7 @@
         });
 
 
-        /* ----------------- generation (unchanged) ----------------- */
+        /* ----------------- generation ----------------- */
 
         function gatherOverlayData(){
             const overlays = [];
@@ -1083,8 +1121,40 @@
             showMessage(`Generated ${combos.length} labels across ${totalPages} page(s). (Grid: ${cols}x${rows}, Gaps: ${gapXMM}mm H, ${gapYMM}mm V).`, 'text-green-500');
             exportPdfBtn.disabled = false;
         }
+        
+        // New function to handle the dramatic message delay
+        function handleGenerateClick() {
+            // Check if there's anything to generate before showing the message
+            if (!templateImagePreview.src || templateImagePreview.style.display === 'none') {
+                showMessage('Please upload a template image first.', 'text-yellow-400');
+                return;
+            }
+            if (colors.length === 0 || Array.from(sizeCheckboxes.querySelectorAll('input:checked')).length === 0) {
+                 showMessage('Please define colors and select sizes before generating.', 'text-yellow-400');
+                return;
+            }
 
-        /* export to PDF (updated message) */
+
+            // 1. Show the dramatic overlay
+            dramaticOverlay.style.display = 'flex';
+            
+            // 2. Clear previous status messages
+            showMessage('');
+            exportPdfBtn.disabled = true;
+
+            // 3. Set the 10-second timer
+            const delayDuration = 10000; // 10 seconds
+
+            setTimeout(() => {
+                // 4. Hide the overlay
+                dramaticOverlay.style.display = 'none';
+
+                // 5. Proceed with label generation
+                generateLabels(); 
+            }, delayDuration);
+        }
+
+        /* export to PDF */
         async function exportToPDF(){
             const sheets = Array.from(document.querySelectorAll('.a4-sheet'));
             if(sheets.length === 0){
@@ -1102,20 +1172,17 @@
                 const sheet = sheets[i];
                 if(i>0) pdf.addPage();
 
-                const scaleFactor = 4;
-                const widthPX = sheet.offsetWidth * scaleFactor;
-                const heightPX = sheet.offsetHeight * scaleFactor;
+                const scaleFactor = 4; // High scale for better resolution
 
                 const canvas = await html2canvas(sheet, {
                     scale: scaleFactor, 
                     useCORS: true, 
                     backgroundColor: '#FFFFFF',
-                    width: widthPX,
-                    height: heightPX,
                 });
 
                 const imgData = canvas.toDataURL('image/jpeg', 1.0);
                 
+                // Map the captured image precisely onto the PDF's A4 page (210mm x 297mm)
                 pdf.addImage(imgData, 'JPEG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM);
             }
 
@@ -1126,17 +1193,16 @@
         }
 
         /* ----------------- wiring ---------------- */
-        generateBtn.addEventListener('click', generateLabels);
+        // Re-wire generate button to use the new handler
+        generateBtn.removeEventListener('click', generateLabels);
+        generateBtn.addEventListener('click', handleGenerateClick); 
+        
         exportPdfBtn.addEventListener('click', exportToPDF);
         addColorBtn.addEventListener('click', addColor);
         window.removeColor = removeColor;
         
-        /* initial setup */
-        window.addEventListener('load', ()=>{
-            renderColorChips();
-            renderSizeCheckboxes();
-            updateTagDimensions();
-
+        // --- Initialization Function ---
+        function initializeDefaultOverlays() {
             const defaultW = dragPreviewContainer.offsetWidth; 
             const defaultCenter = Math.round(defaultW / 2);
 
@@ -1172,6 +1238,37 @@
             if (firstElement) {
                 selectOverlay(firstElement);
             }
+        }
+        
+        // --- Master Load Function ---
+        window.addEventListener('load', ()=>{
+            renderColorChips();
+            renderSizeCheckboxes();
+            updateTagDimensions();
+            
+            // Load Default Template Image
+            fetch(DEFAULT_TEMPLATE_FILE)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Failed to load image: ${response.statusText}`);
+                    return response.blob();
+                })
+                .then(blob => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        templateImagePreview.src = reader.result;
+                        templateImagePreview.style.display = 'block';
+                        updateTagDimensions(); 
+                        initializeDefaultOverlays();
+                    };
+                    reader.readAsDataURL(blob);
+                })
+                .catch(error => {
+                    console.error("Could not load default template image. You must upload one manually.", error);
+                    // Continue with initialization even if image fails to load
+                    updateTagDimensions(); 
+                    initializeDefaultOverlays();
+                    showMessage('Error loading default template image. Please upload manually.', 'text-red-500');
+                });
         });
 
         /* expose some helpers for debugging */
