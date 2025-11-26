@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MR DARZI Label Generator — Full (Position Lock)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <!-- Fonts -->
+    <!-- Added Bold/Display Fonts and standard ones -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Anton&family=Bungee&family=Oswald:wght@400;700&family=Rubik+Mono+One&family=Roboto&family=Lato&family=Poppins&family=Montserrat&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg:#0d0d10}
+        body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:#e6eef8; padding:20px;}
+        /* Use font-family directly for all available fonts */
+        .font-Bungee { font-family: 'Bungee', cursive; }
+        .font-Anton { font-family: 'Anton', sans-serif; }
+        .font-Oswald { font-family: 'Oswald', sans-serif; }
+        .font-Rubik-Mono-One { font-family: 'Rubik Mono One', sans-serif; }
+        .font-Inter { font-family: 'Inter', sans-serif; }
+        .font-Roboto { font-family: 'Roboto', sans-serif; }
+        .font-Lato { font-family: 'Lato', sans-serif; }
+        .font-Poppins { font-family: 'Poppins', sans-serif; }
+        .font-Montserrat { font-family: 'Montserrat', sans-serif; }
+
+        .label-box{border:1px dashed #374151; background:#1f2937; position:relative; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.6); min-width: 50px; min-height: 50px;}
+        .text-overlay{position:absolute; cursor:grab; user-select:none; padding:2px 6px; border-radius:6px; white-space:nowrap; z-index: 10; text-align: center; /* Always centered */ }
+        .text-overlay:active{cursor:grabbing}
+        .selected{box-shadow:0 0 0 3px rgba(99,102,241,.18); border-radius:6px; outline: 1px solid #6366f1;}
+        .a4-sheet{width:210mm; min-height:297mm; background:#fff; color:#000; padding:5mm; box-shadow:0 0 15px rgba(0,0,0,.5); margin:12mm auto; border-radius:6px; page-break-after:always}
+        .a4-header{width:100%; margin-bottom:6mm; border-bottom:1px solid #ddd; padding-bottom:3mm}
+        .a4-grid{display:flex; flex-wrap:wrap; align-content:flex-start}
+        .a4-label{position:relative; box-sizing:border-box; overflow:hidden; page-break-inside:avoid}
+        /* Ensure A4 label elements use the custom font classes for accurate rendering in PDF */
+        .a4-label .font-Bungee { font-family: 'Bungee', cursive; }
+        .a4-label .font-Anton { font-family: 'Anton', sans-serif; }
+        .a4-label .font-Inter { font-family: 'Inter', sans-serif; }
+
+        .a4-text-overlay{position:absolute; white-space:nowrap; color: black; z-index: 5; text-align: center; /* Always centered in print */ }
+        input[type="range"]{accent-color:#60a5fa}
+        .muted{color:#9ca3af}
+        button:disabled{opacity:0.6; cursor:not-allowed}
+        /* Small utility */
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#084d7a; border-radius:999px; font-size:13px; }
+        
+        .pos-input-wrapper input:disabled {
+            background-color: #374151; /* Darker background for locked state */
+            color: #9ca3af;
+        }
+
+        /* Responsive tweaks */
+        @media (max-width: 1024px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+            #drag-preview-container {
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Welcome -->
+    <div id="welcome" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center">
+        <div class="bg-gray-900 p-8 rounded-xl border-4 border-indigo-500 text-center w-[90%] max-w-xl">
+            <h1 class="text-3xl font-bold text-indigo-400 mb-2">HELLOOO SAJJU!</h1>
+            <p class="text-gray-200 mb-4">Label Generator — Code-128, EAN-13, QR ready.</p>
+            <button onclick="document.getElementById('welcome').remove()" class="px-6 py-2 bg-indigo-600 rounded text-white font-semibold">Start</button>
+        </div>
+    </div>
+    <header class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold">DARZI LABEL GENERATOR</h1>
+        </div>
+    </header>
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Col 1: Template + Preview -->
+        <section class="bg-gray-800 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold text-blue-300 mb-4">1. Template & Preview</h2>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="text-sm block mb-1">Tag Width (cm)</label>
+                    <input id="tag-width-cm" type="number" value="5.5" min="1" step="0.1" class="w-full p-2 bg-gray-700 rounded" />
+                </div>
+                <div>
+                    <label class="text-sm block mb-1">Tag Height (cm)</label>
+                    <input id="tag-height-cm" type="number" value="10.5" min="1" step="0.1" class="w-full p-2 bg-gray-700 rounded" />
+                </div>
+            </div>
+            <!-- Gap Inputs -->
+            <div class="grid grid-cols-2 gap-3 mb-3 border-t border-gray-700 pt-3">
+                <div>
+                    <label class="text-sm block mb-1">H-Gap (mm)</label>
+                    <input id="gap-x-mm" type="number" value="1" min="0" step="0.5" class="w-full p-2 bg-gray-700 rounded" />
+                </div>
+                <div>
+                    <label class="text-sm block mb-1">V-Gap (mm)</label>
+                    <input id="gap-y-mm" type="number" value="1" min="0" step="0.5" class="w-full p-2 bg-gray-700 rounded" />
+                </div>
+            </div>
+            <!-- End Gap Inputs -->
+
+            <div class="mb-3">
+                <label class="text-sm block mb-1">Upload Template (PNG / JPG)</label>
+                <input id="template-upload" type="file" accept="image/png, image/jpeg" class="w-full text-sm text-gray-400" />
+            </div>
+            <div class="flex justify-center">
+                <div id="drag-preview-container" class="label-box" style="width:208px;height:397px;">
+                    <img id="template-image-preview" src="" alt="Template" style="width:100%;height:100%;object-fit:cover;display:block" />
+                </div>
+            </div>
+            <p class="text-sm muted mt-3">Add text / barcodes below, drag to position. Values and positions are used when generating A4 sheets.</p>
+        </section>
+
+        <!-- Col 2: Controls -->
+        <section class="bg-gray-800 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold text-blue-300 mb-4">2. Add / Edit Elements</h2>
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <button id="add-text-btn" class="p-2 bg-green-600 rounded font-medium">+ Add Text</button>
+                <button id="add-barcode-btn" class="p-2 bg-yellow-600 rounded font-medium">+ Add Barcode</button>
+            </div>
+            <div class="mb-3 p-3 bg-gray-700 rounded">
+                <h3 class="font-semibold text-white mb-2">Selected Element</h3>
+                <div id="no-selection" class="text-sm muted">No element selected</div>
+                <div id="editor" style="display:none">
+                    <label class="text-sm block mt-2">Text / Value</label>
+                    <input id="editor-text" type="text" class="w-full p-2 bg-gray-900 rounded" />
+                    
+                    <div id="element-type-controls" class="mt-3">
+                        <label class="text-sm block">Element Type</label>
+                        <select id="editor-element-type" class="w-full p-2 bg-gray-900 rounded">
+                            <option value="text">Text</option>
+                            <option value="code128">Barcode — Code-128</option>
+                            <option value="ean13">Barcode — EAN-13</option>
+                            <option value="qrcode">QR Code</option>
+                        </select>
+                    </div>
+
+                    <!-- Text-specific controls -->
+                    <div id="text-settings">
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="text-sm block">Font</label>
+                                <select id="editor-font" class="w-full p-2 bg-gray-900 rounded">
+                                    <option value="Inter">Inter (Normal)</option>
+                                    <option value="Roboto">Roboto (Normal)</option>
+                                    <option value="Lato">Lato (Normal)</option>
+                                    <option value="Poppins">Poppins (Normal)</option>
+                                    <option value="Montserrat">Montserrat (Normal)</option>
+                                    <!-- Bold/Display Fonts -->
+                                    <option value="Bungee">Bungee (Bold Display)</option>
+                                    <option value="Anton">Anton (Bold Display)</option>
+                                    <option value="Oswald">Oswald (Bold)</option>
+                                    <option value="Rubik Mono One">Rubik Mono One (Bold Mono)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-sm block">Size (px)</label>
+                                <div class="flex items-center gap-2">
+                                    <input id="editor-size" type="range" min="6" max="100" step="1" value="20" class="flex-1"/>
+                                    <span id="editor-size-output" class="w-10 text-right text-indigo-300">20</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="text-sm block">Color</label>
+                                <input id="editor-color" type="color" value="#ffffff" class="w-full h-10 p-1 bg-gray-900 rounded"/>
+                            </div>
+                            <div class="col-span-1">
+                                <label class="text-sm block">Align</label>
+                                <div class="w-full p-2 bg-gray-900 rounded text-center text-indigo-300 font-bold">Center Only</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Barcode/QR settings -->
+                    <div id="barcode-settings" style="display:none" class="mt-2">
+                        <label class="text-sm block">Barcode/QR Value</label>
+                        <input id="barcode-value" type="text" class="w-full p-2 bg-gray-900 rounded" placeholder="e.g., SKU001 or 12/13 digits for EAN-13" />
+                        <!-- Note: The scale input acts as the 'size' control for codes -->
+                        <label class="text-sm block mt-2">Scale (1x to 4x)</label>
+                        <div class="flex items-center gap-2">
+                            <input id="barcode-scale" type="range" min="1" max="4" step="0.1" value="2" class="flex-1"/>
+                            <!-- Reusing size output for scale display -->
+                            <span id="barcode-scale-output" class="w-10 text-right text-indigo-300">2.0x</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 flex gap-2">
+                        <button id="apply-edit-btn" class="p-2 bg-indigo-600 rounded">Apply</button>
+                        <button id="delete-element-btn" class="p-2 bg-red-600 rounded">Delete</button>
+                        <button id="deselect-btn" class="p-2 bg-gray-600 rounded">Deselect</button>
+                    </div>
+                    <div class="mt-2 text-sm muted">
+                        <div class="flex items-center gap-2 pos-input-wrapper">
+                            Top: <input id="editor-top" type="number" class="w-20 p-1 bg-gray-900 rounded" disabled /> px
+                            <span id="lock-status-top" class="text-xs text-yellow-400">Locked</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1 pos-input-wrapper">
+                            Left: <input id="editor-left" type="number" class="w-20 p-1 bg-gray-900 rounded" disabled /> px
+                            <span id="lock-status-left" class="text-xs text-yellow-400">Locked</span>
+                        </div>
+                        <button id="unlock-position-btn" class="w-full mt-2 p-1.5 bg-yellow-600 rounded text-sm font-medium">
+                            Unlock Position
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch lists -->
+            <div class="mb-3 p-3 bg-gray-700 rounded">
+                <h3 class="font-semibold text-white mb-2">Colors (Batch)</h3>
+                <div class="flex gap-2 mb-2">
+                    <input id="color-input" type="text" class="flex-1 p-2 bg-gray-900 rounded" placeholder="e.g., Green" />
+                    <button id="add-color-btn" class="p-2 bg-green-600 rounded">Add</button>
+                </div>
+                <div id="color-list" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div class="mb-3 p-3 bg-gray-700 rounded">
+                <h3 class="font-semibold text-white mb-2">Sizes (Batch)</h3>
+                <div id="size-checkboxes" class="flex flex-wrap gap-3"></div>
+            </div>
+        </section>
+
+        <!-- Col 3: Generate -->
+        <section class="bg-gray-800 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold text-blue-300 mb-4">3. Batch Generation & Export</h2>
+            <button id="generate-btn" class="w-full p-3 bg-indigo-600 rounded mb-3">GENERATE A4 PRINT SHEET</button>
+            <button id="export-pdf-btn" class="w-full p-3 bg-red-600 rounded mb-3" disabled>EXPORT TO PDF (A4)</button>
+            <div id="a4-container" class="mt-4">
+                <h3 class="text-white font-medium mb-2">A4 Print Preview</h3>
+                <div id="a4-sheet-container"></div>
+            </div>
+            <p id="label-status" class="text-sm muted mt-3"></p>
+        </section>
+    </main>
+    <script>
+        /* ---------------- constants & state ---------------- */
+        const CM_TO_PX = 37.795; // approx at 96dpi
+        const A4_WIDTH_MM = 210;
+        const A4_HEIGHT_MM = 297;
+        const PAGE_PADDING_MM = 5;
+
+        let colors = ["Green","Cream","Purple","Black","White","Pink"];
+        const sizes = ["XS","S","M","L","XL","2XL","XXL"];
+
+        let nextElementId = 1;
+        let selectedOverlay = null;
+
+        /* ---------------- refs ---------------- */
+        const dragPreviewContainer = document.getElementById('drag-preview-container');
+        const templateUpload = document.getElementById('template-upload');
+        const templateImagePreview = document.getElementById('template-image-preview');
+        const addTextBtn = document.getElementById('add-text-btn');
+        const addBarcodeBtn = document.getElementById('add-barcode-btn');
+        const editor = document.getElementById('editor');
+        const noSelection = document.getElementById('no-selection');
+        const editorText = document.getElementById('editor-text');
+        const editorFont = document.getElementById('editor-font');
+        const editorSize = document.getElementById('editor-size');
+        const editorSizeOutput = document.getElementById('editor-size-output');
+        const editorColor = document.getElementById('editor-color');
+        const editorTop = document.getElementById('editor-top');
+        const editorLeft = document.getElementById('editor-left');
+        const lockStatusTop = document.getElementById('lock-status-top');
+        const lockStatusLeft = document.getElementById('lock-status-left');
+        const unlockPositionBtn = document.getElementById('unlock-position-btn');
+        const applyEditBtn = document.getElementById('apply-edit-btn');
+        const deleteElementBtn = document.getElementById('delete-element-btn');
+        const deselectBtn = document.getElementById('deselect-btn');
+        const editorElementType = document.getElementById('editor-element-type');
+        const barcodeSettings = document.getElementById('barcode-settings');
+        const barcodeValueInput = document.getElementById('barcode-value');
+        const barcodeScaleInput = document.getElementById('barcode-scale');
+        const barcodeScaleOutput = document.getElementById('barcode-scale-output');
+        const textSettings = document.getElementById('text-settings');
+
+        const colorInput = document.getElementById('color-input');
+        const addColorBtn = document.getElementById('add-color-btn');
+        const colorList = document.getElementById('color-list');
+        const sizeCheckboxes = document.getElementById('size-checkboxes');
+        const generateBtn = document.getElementById('generate-btn');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        const a4SheetContainer = document.getElementById('a4-sheet-container');
+        const labelStatus = document.getElementById('label-status');
+        const tagWidthInput = document.getElementById('tag-width-cm');
+        const tagHeightInput = document.getElementById('tag-height-cm');
+        
+        const gapXInput = document.getElementById('gap-x-mm');
+        const gapYInput = document.getElementById('gap-y-mm');
+
+
+        /* ---------------- helpers ---------------- */
+        function px(n){ return `${n}px`; }
+
+        function showMessage(msg, cls='muted'){
+            labelStatus.textContent = msg;
+            labelStatus.className = `text-sm ${cls}`;
+        }
+
+        /* ---------------- init lists ---------------- */
+        function renderColorChips(){
+            colorList.innerHTML='';
+            colors.forEach(c=>{
+                const chip=document.createElement('span');
+                chip.className='chip';
+                chip.innerHTML = `${c} <button style="background:transparent;border:none;color:#fff;font-weight:700;margin-left:6px" onclick="removeColor('${c}')">&times;</button>`;
+                colorList.appendChild(chip);
+            });
+        }
+
+        function addColor(){
+            const v=colorInput.value.trim();
+            if(!v) return;
+            const up=v.toUpperCase();
+            if(!colors.includes(up)) colors.push(up);
+            colorInput.value='';
+            renderColorChips();
+        }
+
+        function removeColor(c){
+            colors = colors.filter(x=>x!==c);
+            renderColorChips();
+        }
+
+        function renderSizeCheckboxes(){
+            sizeCheckboxes.innerHTML='';
+            sizes.forEach(s=>{
+                const id=`size-${s}`;
+                const div=document.createElement('div');
+                div.innerHTML = `<input id="${id}" type="checkbox" checked class="h-4 w-4 mr-2"><label for="${id}" class="text-sm">${s}</label>`;
+                sizeCheckboxes.appendChild(div);
+            });
+        }
+
+        /* ---------------- template & dims ---------------- */
+        function updateTagDimensions(){
+            const widthCm = parseFloat(tagWidthInput.value) || 5.5;
+            const heightCm = parseFloat(tagHeightInput.value) || 10.5;
+            const wpx = Math.round(widthCm * CM_TO_PX);
+            const hpx = Math.round(heightCm * CM_TO_PX);
+            dragPreviewContainer.style.width = px(Math.max(50, wpx));
+            dragPreviewContainer.style.height = px(Math.max(50, hpx));
+        }
+
+        tagWidthInput.addEventListener('input', updateTagDimensions);
+        tagHeightInput.addEventListener('input', updateTagDimensions);
+        templateUpload.addEventListener('change', loadTemplateImage);
+
+        function loadTemplateImage(){
+            const input = templateUpload;
+            if(input.files && input.files[0]){
+                const reader = new FileReader();
+                reader.onload = e=>{
+                    templateImagePreview.src = e.target.result;
+                    templateImagePreview.style.display = 'block';
+                    updateTagDimensions();
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        /* ---------------- overlays: create/select/drag ---------------- */
+        function createTextOverlay(text='ITEM NAME', opts={}){
+            const id = `overlay-${nextElementId++}`;
+            const div = document.createElement('div');
+            const defaultSize = 20; 
+
+            div.className = 'text-overlay';
+            div.id = id;
+            div.dataset.type = 'text';
+            div.dataset.value = text;
+            
+            // Set position
+            div.style.top = opts.top ? px(opts.top) : '20%';
+            // Horizontal position is the center point
+            div.style.left = opts.left ? px(opts.left) : '50%';
+            
+            // Set style
+            div.style.color = opts.color || '#ffffff';
+            div.style.fontFamily = opts.font || 'Inter';
+            div.style.fontSize = (opts.size||defaultSize) + 'px';
+            div.style.textAlign = 'center'; // Forced center alignment
+            
+            // Apply centering transform
+            div.style.transform = 'translateX(-50%)';
+            div.textContent = text;
+            
+            div.classList.add(`font-${div.style.fontFamily.replace(/\s/g, '-')}`);
+            div.dataset.locked = 'true'; // Initial position lock
+
+            addOverlayBehavior(div);
+            dragPreviewContainer.appendChild(div);
+            selectOverlay(div);
+            return div;
+        }
+
+        function createBarcodeOverlay(type='code128', value='', opts={}){ 
+            const id = `overlay-${nextElementId++}`;
+            const container = document.createElement('div');
+            container.className = 'text-overlay';
+            container.id = id;
+            container.dataset.type = type; 
+            container.dataset.value = value;
+            
+            container.style.top = opts.top ? px(opts.top) : '60%';
+            container.style.left = opts.left ? px(opts.left) : '50%';
+            container.style.transform = 'translateX(-50%)'; // Barcodes/QR are also centered
+            container.style.padding = '4px';
+            container.style.background = 'transparent';
+            container.style.textAlign = 'center';
+            container.dataset.locked = 'true'; // Initial position lock
+
+            if(type === 'qrcode'){
+                const canvas = document.createElement('canvas');
+                canvas.style.display = 'block';
+                canvas.dataset.scale = opts.scale || 2;
+                container.appendChild(canvas);
+                renderQRCodeToCanvas(canvas, value, canvas.dataset.scale);
+            } else {
+                const img = document.createElement('img');
+                img.alt = 'barcode';
+                img.style.display = 'block';
+                img.style.maxWidth = '220px';
+                img.style.height = 'auto';
+                img.dataset.scale = opts.scale || 2;
+                container.appendChild(img);
+                renderBarcodeToImg(img, type, value, img.dataset.scale);
+            }
+
+            addOverlayBehavior(container);
+            dragPreviewContainer.appendChild(container);
+            selectOverlay(container);
+            return container;
+        }
+
+        function renderBarcodeToImg(imgEl, type, value, scale){
+            try{
+                const canvas=document.createElement('canvas');
+                if(type === 'ean13'){
+                    const digits = (value||'').replace(/\D/g,'');
+                    const useVal = (digits.length === 12 || digits.length === 13) ? digits : '000000000000';
+                    JsBarcode(canvas, useVal, {format:'EAN13', height:40*scale, width:1*scale, displayValue:true});
+                } else {
+                    JsBarcode(canvas, value || ' ', {format:'CODE128', height:40*scale, width:1*scale, displayValue:true});
+                }
+                imgEl.src = canvas.toDataURL('image/png');
+            }catch(e){
+                console.warn('Barcode render failed', e);
+                imgEl.src = '';
+            }
+        }
+
+        function renderQRCodeToCanvas(canvasEl, value, scale){
+            try{
+                const size = 100 * (scale || 2);
+                canvasEl.width = size;
+                canvasEl.height = size;
+                const ctx = canvasEl.getContext('2d');
+                ctx.clearRect(0, 0, size, size);
+                new QRious({element: canvasEl, value: value || '', size: size});
+            }catch(e){
+                console.warn('QR render failed', e);
+            }
+        }
+
+        /* drag & select behavior */
+        let activeElement = null, offsetX=0, offsetY=0;
+
+        function addOverlayBehavior(el){
+            el.addEventListener('mousedown', startDrag);
+            el.addEventListener('touchstart', startDrag, {passive:false});
+            el.addEventListener('dblclick', ()=>{
+                selectOverlay(el);
+                if(el.dataset.type==='text') editorText.focus();
+            });
+            el.addEventListener('click', (ev)=>{
+                ev.stopPropagation();
+                selectOverlay(el);
+            });
+        }
+
+        function startDrag(e){
+            // REMOVED e.preventDefault() here to allow native click event to fire on tap (iOS fix).
+            if (!e.touches && e.button !== 0) return; // Only allow left mouse button
+
+            activeElement = e.target.closest('.text-overlay');
+            if(!activeElement) return;
+
+            selectOverlay(activeElement);
+
+            if (activeElement.dataset.locked === 'true') {
+                // If locked, we don't attach drag listeners, relying on native click event for selection.
+                return; 
+            }
+
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            const rect = activeElement.getBoundingClientRect();
+            offsetX = clientX - rect.left;
+            offsetY = clientY - rect.top;
+
+            document.addEventListener('mousemove', duringDrag);
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchmove', duringDrag, {passive:false});
+            document.addEventListener('touchend', endDrag);
+        }
+
+        function duringDrag(e){
+            if(!activeElement || activeElement.dataset.locked === 'true') return;
+            
+            // Prevent page scrolling on touch devices ONLY when movement is detected
+            if (e.touches) {
+                e.preventDefault(); 
+            }
+
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            const containerRect = dragPreviewContainer.getBoundingClientRect();
+            
+            let newLeft = clientX - containerRect.left - offsetX;
+            let newTop = clientY - containerRect.top - offsetY;
+
+            // Constrain movement within bounds
+            newLeft = Math.max(0, Math.min(newLeft, containerRect.width - activeElement.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, containerRect.height - activeElement.offsetHeight));
+
+            // Move the center point (left property)
+            activeElement.style.left = px(newLeft);
+            activeElement.style.top = px(newTop);
+            
+            updateEditorPositionInputs(activeElement);
+        }
+
+        function endDrag(){
+            document.removeEventListener('mousemove', duringDrag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchmove', duringDrag);
+            document.removeEventListener('touchend', endDrag);
+            activeElement = null;
+        }
+
+        function selectOverlay(el){
+            const previous = dragPreviewContainer.querySelector('.selected');
+            if(previous) previous.classList.remove('selected');
+
+            selectedOverlay = el;
+
+            if(!el){
+                editor.style.display='none';
+                noSelection.style.display='block';
+                return;
+            }
+
+            el.classList.add('selected');
+            noSelection.style.display='none';
+            editor.style.display='block';
+
+            const type = el.dataset.type;
+            editorElementType.value = type;
+            
+            // --- POSITION LOCK MANAGEMENT ---
+            const isLocked = el.dataset.locked === 'true';
+            editorTop.disabled = isLocked;
+            editorLeft.disabled = isLocked;
+            unlockPositionBtn.disabled = !isLocked; // Enable unlock button if locked
+
+            lockStatusTop.textContent = isLocked ? 'Locked' : 'Unlocked';
+            lockStatusLeft.textContent = isLocked ? 'Locked' : 'Unlocked';
+            lockStatusTop.className = `text-xs ${isLocked ? 'text-yellow-400' : 'text-green-400'}`;
+            lockStatusLeft.className = `text-xs ${isLocked ? 'text-yellow-400' : 'text-green-400'}`;
+            // --------------------------------
+
+            if(type === 'text'){
+                editorText.value = el.textContent;
+                editorFont.value = el.style.fontFamily || 'Inter';
+                const size = parseInt(el.style.fontSize) || 20;
+                editorSize.value = size;
+                editorSizeOutput.textContent = size;
+                editorColor.value = rgbToHex(el.style.color || '#ffffff');
+            } else {
+                editorText.value = el.dataset.value || '';
+                barcodeValueInput.value = el.dataset.value || '';
+                const childEl = el.querySelector('canvas') || el.querySelector('img');
+                
+                const scale = parseFloat(childEl?.dataset.scale || 2);
+                barcodeScaleInput.value = scale;
+                barcodeScaleOutput.textContent = scale.toFixed(1) + 'x';
+            }
+
+            editorTop.value = Math.round(parseFloat(el.style.top));
+            editorLeft.value = Math.round(parseFloat(el.style.left));
+
+            handleEditorTypeVisibility();
+        }
+
+        function deselect(){
+            if(selectedOverlay) selectedOverlay.classList.remove('selected');
+            selectedOverlay = null;
+            editor.style.display='none';
+            noSelection.style.display='block';
+        }
+        deselectBtn.addEventListener('click', deselect);
+
+        function updateEditorPositionInputs(el){
+            if(!el) return;
+            editorTop.value = Math.round(parseFloat(el.style.top));
+            editorLeft.value = Math.round(parseFloat(el.style.left));
+        }
+
+        function rgbToHex(rgb){
+            if(!rgb) return '#ffffff';
+            if(rgb.startsWith('#')) return rgb;
+
+            const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if(!m) return '#ffffff';
+            
+            return '#' + [1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join('');
+        }
+
+        /* editor interactions */
+        editorElementType.addEventListener('change', handleEditorTypeVisibility);
+
+        function handleEditorTypeVisibility(){
+            const val = editorElementType.value;
+
+            if(val === 'text'){
+                barcodeSettings.style.display = 'none';
+                textSettings.style.display = 'block';
+                editorText.placeholder = 'Text to show';
+                const size = parseInt(selectedOverlay.style.fontSize) || 20;
+                editorSize.value = size;
+                editorSizeOutput.textContent = size;
+
+            } else {
+                barcodeSettings.style.display = 'block';
+                textSettings.style.display = 'none';
+                editorText.placeholder = val === 'qrcode' ? 'QR payload (URL/text)' : (val === 'ean13' ? '12 or 13 digits' : 'Barcode value');
+                const childEl = selectedOverlay.querySelector('canvas') || selectedOverlay.querySelector('img');
+                const scale = parseFloat(childEl?.dataset.scale || 2);
+                barcodeScaleInput.value = scale;
+                barcodeScaleOutput.textContent = scale.toFixed(1) + 'x';
+            }
+        }
+        
+        // --- Real-Time Updates (Size/Font/Color) ---
+        editorSize.addEventListener('input', () => {
+            const size = editorSize.value;
+            editorSizeOutput.textContent = size;
+            if (selectedOverlay && selectedOverlay.dataset.type === 'text') {
+                selectedOverlay.style.fontSize = px(size);
+            }
+        });
+
+        barcodeScaleInput.addEventListener('input', () => {
+            const scale = parseFloat(barcodeScaleInput.value);
+            barcodeScaleOutput.textContent = scale.toFixed(1) + 'x'; 
+            if (!selectedOverlay) return;
+
+            const type = selectedOverlay.dataset.type;
+            const value = selectedOverlay.dataset.value || '';
+            
+            if (type === 'qrcode') {
+                const canvas = selectedOverlay.querySelector('canvas');
+                if (canvas) {
+                    canvas.dataset.scale = scale;
+                    renderQRCodeToCanvas(canvas, value, scale);
+                }
+            } else if (type === 'ean13' || type === 'code128') {
+                const img = selectedOverlay.querySelector('img');
+                if (img) {
+                    img.dataset.scale = scale;
+                    renderBarcodeToImg(img, type, value, scale);
+                }
+            }
+        });
+
+
+        editorFont.addEventListener('change', () => {
+            const newFont = editorFont.value;
+            if (selectedOverlay && selectedOverlay.dataset.type === 'text') {
+                selectedOverlay.className = selectedOverlay.className.split(' ').filter(c => !c.startsWith('font-')).join(' ');
+                selectedOverlay.style.fontFamily = newFont;
+                selectedOverlay.classList.add(`font-${newFont.replace(/\s/g, '-')}`);
+                selectedOverlay.style.transform = 'translateX(-50%)';
+            }
+        });
+
+        editorColor.addEventListener('input', () => {
+            const newColor = editorColor.value;
+            if (selectedOverlay && selectedOverlay.dataset.type === 'text') {
+                selectedOverlay.style.color = newColor;
+            }
+        });
+        
+        // --- Position Unlock via Button ---
+        function unlockPosition() {
+            if (selectedOverlay) {
+                selectedOverlay.dataset.locked = 'false';
+                selectOverlay(selectedOverlay); // Refresh editor UI
+            }
+        }
+        unlockPositionBtn.addEventListener('click', unlockPosition);
+        
+        // --- Manual Position Update (Only if Unlocked) ---
+        function updatePositionIfUnlocked(e) {
+            if (!selectedOverlay) return;
+
+            if (selectedOverlay.dataset.locked === 'true') {
+                // If locked, revert the input field value to the element's current position (discarding the user's change)
+                if (e.target.id === 'editor-top') {
+                    editorTop.value = Math.round(parseFloat(selectedOverlay.style.top));
+                } else if (e.target.id === 'editor-left') {
+                    editorLeft.value = Math.round(parseFloat(selectedOverlay.style.left));
+                }
+                return; 
+            }
+
+            // Only update position if unlocked
+            if(e.target.id === 'editor-top') {
+                selectedOverlay.style.top = px(parseInt(editorTop.value)||0);
+            } else if (e.target.id === 'editor-left') {
+                selectedOverlay.style.left = px(parseInt(editorLeft.value)||0);
+                selectedOverlay.style.transform = 'translateX(-50%)'; 
+            }
+        }
+
+        editorTop.addEventListener('input', updatePositionIfUnlocked);
+        editorLeft.addEventListener('input', updatePositionIfUnlocked);
+        // --- End Position Logic ---
+
+
+        applyEditBtn.addEventListener('click', ()=>{
+            if(!selectedOverlay) return;
+
+            const type = editorElementType.value;
+            // The position is already updated in the input listeners if unlocked, but we apply it explicitly here just in case.
+            const top = px(parseInt(editorTop.value)||0);
+            const left = px(parseInt(editorLeft.value)||0);
+
+            selectedOverlay.style.top = top;
+            selectedOverlay.style.left = left;
+
+            selectedOverlay.className = selectedOverlay.className.split(' ').filter(c => !c.startsWith('font-')).join(' ');
+
+            if(type === 'text'){
+                selectedOverlay.dataset.type = 'text';
+                selectedOverlay.innerHTML = '';
+                
+                const textVal = editorText.value || '';
+                selectedOverlay.textContent = textVal;
+                selectedOverlay.dataset.value = textVal;
+
+                const newFont = editorFont.value || 'Inter';
+                const newSize = parseInt(editorSize.value)||20;
+                const newAlign = 'center';
+
+                selectedOverlay.style.fontFamily = newFont;
+                selectedOverlay.classList.add(`font-${newFont.replace(/\s/g, '-')}`);
+                selectedOverlay.style.fontSize = px(newSize);
+                selectedOverlay.style.color = editorColor.value || '#ffffff';
+                selectedOverlay.style.textAlign = newAlign;
+                selectedOverlay.style.transform = 'translateX(-50%)';
+
+            } else if(type === 'qrcode'){
+                selectedOverlay.dataset.type = 'qrcode';
+                const value = barcodeValueInput.value || '';
+                selectedOverlay.dataset.value = value;
+                
+                editorText.value = value;
+
+                selectedOverlay.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                const scale = parseFloat(barcodeScaleInput.value)||2;
+                canvas.dataset.scale = scale;
+                selectedOverlay.appendChild(canvas);
+                renderQRCodeToCanvas(canvas, value, scale);
+                
+                selectedOverlay.style.transform = 'translateX(-50%)';
+
+            } else if(type === 'ean13' || type === 'code128'){
+                selectedOverlay.dataset.type = type;
+                const value = barcodeValueInput.value || '';
+                selectedOverlay.dataset.value = value;
+
+                editorText.value = value;
+
+                selectedOverlay.innerHTML = '';
+                const img = document.createElement('img');
+                img.dataset.scale = parseFloat(barcodeScaleInput.value)||2;
+                img.style.display = 'block';
+                img.style.maxWidth = '220px';
+                selectedOverlay.appendChild(img);
+                renderBarcodeToImg(img, type, value, img.dataset.scale);
+
+                selectedOverlay.style.transform = 'translateX(-50%)';
+            }
+        });
+
+        deleteElementBtn.addEventListener('click', ()=>{
+            if(!selectedOverlay) return;
+            selectedOverlay.remove();
+            selectedOverlay = null;
+            deselect();
+        });
+
+        /* add element buttons */
+        addTextBtn.addEventListener('click', ()=> createTextOverlay('NEW TEXT', {top: 20, left: Math.round(dragPreviewContainer.offsetWidth/2), font: 'Inter', size: 24}));
+        
+        addBarcodeBtn.addEventListener('click', ()=> {
+            const type = prompt('Enter barcode type: code128, ean13, qrcode', 'code128') || 'code128';
+            const defaultLeft = Math.round(dragPreviewContainer.offsetWidth/2);
+            const defaultTop = Math.round(dragPreviewContainer.offsetHeight*0.65);
+            const defaultValue = ''; 
+
+            if(type === 'qrcode') {
+                createBarcodeOverlay('qrcode', defaultValue, {top: defaultTop, left: defaultLeft});
+            } else if(type === 'ean13') {
+                createBarcodeOverlay('ean13', defaultValue, {top: defaultTop, left: defaultLeft});
+            } else {
+                createBarcodeOverlay('code128', defaultValue, {top: defaultTop, left: defaultLeft});
+            }
+        });
+
+        /* click outside to deselect */
+        document.addEventListener('click', (e)=>{
+            if(!e.target.closest('.text-overlay') && 
+               !e.target.closest('#editor') && 
+               !e.target.closest('#add-text-btn') && 
+               !e.target.closest('#add-barcode-btn') && 
+               !e.target.closest('#color-list') && 
+               !e.target.closest('#size-checkboxes')
+              ){
+                deselect();
+            }
+        });
+
+
+        /* ----------------- generation (unchanged) ----------------- */
+
+        function gatherOverlayData(){
+            const overlays = [];
+            const elems = dragPreviewContainer.querySelectorAll('.text-overlay');
+
+            elems.forEach(el=>{
+                const currentTop = parseFloat(el.style.top);
+                const currentLeft = parseFloat(el.style.left);
+
+                if(el.dataset.type === 'text'){
+                    overlays.push({
+                        type: 'text',
+                        value: el.textContent,
+                        top: currentTop,
+                        left: currentLeft,
+                        color: rgbToHex(el.style.color || '#ffffff'),
+                        fontFamily: el.style.fontFamily || 'Inter',
+                        fontSize: parseInt(el.style.fontSize) || 20,
+                        align: 'center', // Always center
+                        transform: 'translateX(-50%)',
+                        fontClass: `font-${(el.style.fontFamily || 'Inter').replace(/\s/g, '-')}`
+                    });
+                } else if(el.dataset.type === 'qrcode'){
+                    const canvas = el.querySelector('canvas');
+                    overlays.push({
+                        type: 'qrcode',
+                        value: el.dataset.value || '',
+                        top: currentTop,
+                        left: currentLeft,
+                        scale: parseFloat(canvas?.dataset.scale || 2),
+                        canvasDataUrl: canvas ? canvas.toDataURL('image/png') : null,
+                        width: canvas?.width || 100,
+                        height: canvas?.height || 100,
+                        transform: 'translateX(-50%)',
+                    });
+                } else { // barcode
+                    const img = el.querySelector('img');
+                    overlays.push({
+                        type: el.dataset.type,
+                        value: el.dataset.value || '',
+                        top: currentTop,
+                        left: currentLeft,
+                        scale: parseFloat(img?.dataset.scale || 2),
+                        transform: 'translateX(-50%)',
+                    });
+                }
+            });
+            return overlays;
+        }
+
+        function generateLabels(){
+            const templateSrc = templateImagePreview.src;
+            if(!templateSrc || templateImagePreview.style.display === 'none'){
+                showMessage('Please upload a template image first.', 'text-yellow-400');
+                return;
+            }
+
+            const selectedSizes = Array.from(sizeCheckboxes.querySelectorAll('input:checked')).map(cb => cb.nextElementSibling.textContent);
+            if(selectedSizes.length === 0){
+                showMessage('Select at least one size.','text-yellow-400');
+                return;
+            }
+            if(colors.length === 0){
+                showMessage('Add at least one color.','text-yellow-400');
+                return;
+            }
+
+            const tagWidthCm = parseFloat(tagWidthInput.value) || 5.5;
+            const tagHeightCm = parseFloat(tagHeightInput.value) || 10.5;
+            const tagWidthMM = tagWidthCm * 10;
+            const tagHeightMM = tagHeightCm * 10;
+
+            const gapXMM = parseFloat(gapXInput.value) || 0;
+            const gapYMM = parseFloat(gapYInput.value) || 0;
+
+            const printableWidthMM = A4_WIDTH_MM - (2*PAGE_PADDING_MM);
+            const printableHeightMM = A4_HEIGHT_MM - (2*PAGE_PADDING_MM);
+            const headerHeightMM = 15;
+
+            const cols = Math.floor((printableWidthMM + gapXMM) / (tagWidthMM + gapXMM)) || 0;
+            const rows = Math.floor((printableHeightMM - headerHeightMM + gapYMM) / (tagHeightMM + gapYMM)) || 0;
+            
+            if(cols === 0 || rows === 0){
+                showMessage(`Tag too large to fit on A4 or gaps too large. Reduce tag dimensions/gaps. (Grid: ${cols}x${rows})`, 'text-red-500');
+                return;
+            }
+
+            const labelsPerPage = cols * rows;
+            const combos = [];
+            colors.forEach(c => selectedSizes.forEach(s => combos.push({color:c, size:s})));
+
+            const overlays = gatherOverlayData();
+            a4SheetContainer.innerHTML = '';
+
+            const totalPages = Math.ceil(combos.length / labelsPerPage);
+            let idx = 0;
+
+            for(let p=0;p<totalPages;p++){
+                const sheet = document.createElement('div');
+                sheet.className = 'a4-sheet';
+                
+                const header = document.createElement('div');
+                header.className = 'a4-header';
+                header.innerHTML = `<h4 style="margin:0;font-weight:700;font-size:11pt;">DARZI PRODUCTION BATCH - Page ${p+1} / ${totalPages}</h4> <p style="margin:4px 0 0 0; font-size:8pt">Dims: ${tagWidthCm}cm x ${tagHeightCm}cm | Packing: ${cols}x${rows} (Gaps: ${gapXMM}mm H, ${gapYMM}mm V)</p>`;
+                sheet.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = 'a4-grid';
+                
+                const usedWidthMM = (tagWidthMM * cols) + (gapXMM * (cols - 1));
+                const usedHeightMM = (tagHeightMM * rows) + (gapYMM * (rows - 1));
+
+                grid.style.width = usedWidthMM + 'mm';
+                grid.style.height = usedHeightMM + 'mm';
+                grid.style.margin = '0 auto';
+
+                for(let i=0;i<labelsPerPage;i++){
+                    if(idx >= combos.length) break;
+
+                    const combo = combos[idx++];
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'a4-label';
+                    labelDiv.style.width = tagWidthMM + 'mm';
+                    labelDiv.style.height = tagHeightMM + 'mm';
+                    labelDiv.style.overflow = 'hidden';
+                    labelDiv.style.border = '0.3px solid #ddd';
+                    labelDiv.style.boxSizing = 'border-box';
+                    labelDiv.style.position = 'relative';
+
+                    if ((i + 1) % cols !== 0) {
+                        labelDiv.style.marginRight = gapXMM + 'mm';
+                    }
+                    if (Math.floor(i / cols) < rows - 1) {
+                        labelDiv.style.marginBottom = gapYMM + 'mm';
+                    }
+
+                    // 1. Template Image
+                    const img = document.createElement('img');
+                    img.src = templateSrc;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'cover';
+                    labelDiv.appendChild(img);
+
+                    // 2. Overlays
+                    overlays.forEach(o=>{
+                        const containerPxW = dragPreviewContainer.offsetWidth;
+                        const containerPxH = dragPreviewContainer.offsetHeight;
+
+                        const leftMM = (o.left / containerPxW) * tagWidthMM;
+                        const topMM = (o.top / containerPxH) * tagHeightMM;
+
+                        if(o.type === 'text'){
+                            const span = document.createElement('span');
+                            span.className = 'a4-text-overlay';
+
+                            // Apply font class for html2canvas consistency
+                            span.classList.add(o.fontClass);
+                            
+                            let textVal = o.value;
+                            // Exact replacement logic
+                            if(textVal === 'COLOR') textVal = combo.color.toUpperCase();
+                            if(textVal === 'XL') textVal = combo.size.toUpperCase();
+                            
+                            span.textContent = textVal || '';
+
+                            span.style.left = leftMM + 'mm';
+                            span.style.top = topMM + 'mm';
+                            span.style.color = o.color;
+                            span.style.fontFamily = o.fontFamily; // Fallback
+                            span.style.fontSize = (o.fontSize * 0.2645833) + 'mm';
+                            span.style.textAlign = 'center'; // Forced center
+
+                            span.style.transform = o.transform;
+
+                            labelDiv.appendChild(span);
+                        } else if(o.type === 'qrcode'){
+                            const size = 100 * o.scale;
+                            const qrCanvas = document.createElement('canvas');
+                            qrCanvas.width = size;
+                            qrCanvas.height = size;
+                            new QRious({element: qrCanvas, value: o.value || '', size: size});
+                            
+                            const bimg = document.createElement('img');
+                            bimg.src = qrCanvas.toDataURL('image/png');
+                            
+                            bimg.style.position = 'absolute';
+                            bimg.style.left = leftMM + 'mm';
+                            bimg.style.top = topMM + 'mm';
+                            
+                            const pxToMM = 0.2645833;
+                            bimg.style.width = (size * pxToMM) + 'mm';
+                            bimg.style.height = (size * pxToMM) + 'mm';
+                            bimg.style.transform = o.transform;
+
+                            labelDiv.appendChild(bimg);
+                        } else { // barcode (Code-128 or EAN-13)
+                            const bcCanvas = document.createElement('canvas');
+                            let useVal = o.value || ' ';
+                            let format = 'CODE128';
+
+                            if(o.type === 'ean13'){
+                                const digits = (o.value||'').replace(/\D/g,'');
+                                useVal = (digits.length === 12 || digits.length === 13) ? digits : '000000000000';
+                                format = 'EAN13';
+                            }
+                            
+                            JsBarcode(bcCanvas, useVal || ' ', {format:format, height:40*o.scale, width:1*o.scale, displayValue:true});
+                            
+                            const bimg = document.createElement('img');
+                            bimg.src = bcCanvas.toDataURL('image/png');
+                            
+                            bimg.style.position = 'absolute';
+                            bimg.style.left = leftMM + 'mm';
+                            bimg.style.top = topMM + 'mm';
+                            
+                            const pxToMM = 0.2645833;
+                            const bcWidthMM = bcCanvas.width * pxToMM;
+                            const bcHeightMM = bcCanvas.height * pxToMM;
+
+                            bimg.style.width = bcWidthMM + 'mm';
+                            bimg.style.height = bcHeightMM + 'mm';
+                            bimg.style.transform = o.transform;
+                            
+                            labelDiv.appendChild(bimg);
+                        }
+                    });
+                    
+                    grid.appendChild(labelDiv);
+                }
+                
+                sheet.appendChild(grid);
+                a4SheetContainer.appendChild(sheet);
+            }
+
+            showMessage(`Generated ${combos.length} labels across ${totalPages} page(s). (Grid: ${cols}x${rows}, Gaps: ${gapXMM}mm H, ${gapYMM}mm V).`, 'text-green-500');
+            exportPdfBtn.disabled = false;
+        }
+
+        /* export to PDF (updated message) */
+        async function exportToPDF(){
+            const sheets = Array.from(document.querySelectorAll('.a4-sheet'));
+            if(sheets.length === 0){
+                showMessage('No generated A4 sheets. Click GENERATE first.','text-red-500');
+                return;
+            }
+
+            exportPdfBtn.disabled = true;
+            showMessage('Generating PDF... please wait. This may take a moment for many pages.','text-yellow-400');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p','mm','a4');
+
+            for(let i=0;i<sheets.length;i++){
+                const sheet = sheets[i];
+                if(i>0) pdf.addPage();
+
+                const scaleFactor = 4;
+                const widthPX = sheet.offsetWidth * scaleFactor;
+                const heightPX = sheet.offsetHeight * scaleFactor;
+
+                const canvas = await html2canvas(sheet, {
+                    scale: scaleFactor, 
+                    useCORS: true, 
+                    backgroundColor: '#FFFFFF',
+                    width: widthPX,
+                    height: heightPX,
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                
+                pdf.addImage(imgData, 'JPEG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM);
+            }
+
+            pdf.save('MR_DARZI_Labels_Batch.pdf');
+            // Display the custom message after successful download
+            showMessage('RAAZI INTE SHAMBLAM MARAKKALLLEEEE', 'text-pink-400 font-bold text-lg');
+            exportPdfBtn.disabled = false;
+        }
+
+        /* ----------------- wiring ---------------- */
+        generateBtn.addEventListener('click', generateLabels);
+        exportPdfBtn.addEventListener('click', exportToPDF);
+        addColorBtn.addEventListener('click', addColor);
+        window.removeColor = removeColor;
+        
+        /* initial setup */
+        window.addEventListener('load', ()=>{
+            renderColorChips();
+            renderSizeCheckboxes();
+            updateTagDimensions();
+
+            const defaultW = dragPreviewContainer.offsetWidth; 
+            const defaultCenter = Math.round(defaultW / 2);
+
+            // 1. SIZE (Top 150px) - Purple, 12px
+            createTextOverlay('XL', {
+                top: 150, 
+                left: defaultCenter, 
+                font: 'Inter',
+                size: 12,
+                color: '#a78bfa'
+            });
+
+            // 2. ITEM NAME (Top 220px) - White, 30px
+            createTextOverlay('ITEM NAME', {
+                top: 220, 
+                left: defaultCenter, 
+                font: 'Anton', 
+                size: 30,
+                color: '#ffffff'
+            });
+
+            // 3. COLOR (Top 264px) - White, 14px
+            createTextOverlay('COLOR', {
+                top: 264, 
+                left: defaultCenter, 
+                font: 'Inter',
+                size: 14,
+                color: '#ffffff'
+            });
+            
+            // Set first element as selected on load
+            const firstElement = dragPreviewContainer.querySelector('.text-overlay');
+            if (firstElement) {
+                selectOverlay(firstElement);
+            }
+        });
+
+        /* expose some helpers for debugging */
+        window.createTextOverlay = createTextOverlay;
+        window.createBarcodeOverlay = createBarcodeOverlay;
+        window.updateTagDimensions = updateTagDimensions;
+    </script>
+</body>
+</html>
+
